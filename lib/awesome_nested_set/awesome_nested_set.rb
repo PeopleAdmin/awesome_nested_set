@@ -28,6 +28,10 @@ module CollectiveIdea #:nodoc:
       #   (if it hasn't been already) and use that as the foreign key restriction. You
       #   can also pass an array to scope by multiple attributes.
       #   Example: <tt>acts_as_nested_set :scope => [:notable_id, :notable_type]</tt>
+      # * +:subset+ - restricts the records for which the nested set will be
+      #   maintained. Specified as a symbol that refers to an ActiveRecord scope
+      #   defined in the class.
+      #   Example: <tt>acts_as_nested_set :subset => :active</tt>
       # * +:dependent+ - behavior for cascading destroy. If set to :destroy, all the
       #   child objects are destroyed alongside this object by calling their destroy
       #   method. If set to :delete_all (default), all the child objects are deleted
@@ -110,7 +114,7 @@ module CollectiveIdea #:nodoc:
           end
 
           def roots
-            where(parent_column_name => nil).order(quoted_left_column_name)
+            nested_set_subset.where(parent_column_name => nil).order(quoted_left_column_name)
           end
 
           def leaves
@@ -123,6 +127,7 @@ module CollectiveIdea #:nodoc:
 
           def left_and_rights_valid?
             ## AS clause not supported in Oracle in FROM clause for aliasing table name
+            nested_set_subset.
             joins("LEFT OUTER JOIN #{quoted_table_name}" +
                 (connection.adapter_name.match(/Oracle/).nil? ?  " AS " : " ") +
                 "parent ON " +
@@ -144,7 +149,8 @@ module CollectiveIdea #:nodoc:
             end.push(nil).join(", ")
             [quoted_left_column_name, quoted_right_column_name].all? do |column|
               # No duplicates
-              select("#{scope_string}#{column}, COUNT(#{column})").
+                nested_set_subset.
+                  select("#{scope_string}#{column}, COUNT(#{column})").
                   group("#{scope_string}#{column}").
                   having("COUNT(#{column}) > 1").
                   first.nil?
@@ -172,6 +178,14 @@ module CollectiveIdea #:nodoc:
             end
           end
 
+          def nested_set_subset
+            subset = where(nil)
+            if acts_as_nested_set_options[:subset]
+              subset = send(acts_as_nested_set_options[:subset])
+            end
+            subset
+          end
+
           # Rebuilds the left & rights if unset or invalid.
           # Also very useful for converting from acts_as_tree.
           def rebuild!(validate_nodes = true)
@@ -192,14 +206,14 @@ module CollectiveIdea #:nodoc:
               # set left
               node[left_column_name] = indices[scope.call(node)] += 1
               # find
-              where(["#{quoted_parent_column_name} = ? #{scope.call(node)}", node]).order("#{quoted_left_column_name}, #{quoted_right_column_name}, id").each{|n| set_left_and_rights.call(n) }
+              nested_set_subset.where(["#{quoted_parent_column_name} = ? #{scope.call(node)}", node]).order("#{quoted_left_column_name}, #{quoted_right_column_name}, id").each{|n| set_left_and_rights.call(n) }
               # set right
               node[right_column_name] = indices[scope.call(node)] += 1
               node.save!(:validate => validate_nodes)
             end
 
             # Find root node(s)
-            root_nodes = where("#{quoted_parent_column_name} IS NULL").order("#{quoted_left_column_name}, #{quoted_right_column_name}, id").each do |root_node|
+            root_nodes = nested_set_subset.where("#{quoted_parent_column_name} IS NULL").order("#{quoted_left_column_name}, #{quoted_right_column_name}, id").each do |root_node|
               # setup index for this scope
               indices[scope.call(root_node)] ||= 0
               set_left_and_rights.call(root_node)
@@ -458,7 +472,7 @@ module CollectiveIdea #:nodoc:
           options[:conditions] = scopes.inject({}) do |conditions,attr|
             conditions.merge attr => self[attr]
           end unless scopes.empty?
-          self.class.base_class.unscoped.scoped options
+          self.class.base_class.unscoped.nested_set_subset.scoped options
         end
 
         def store_new_parent
