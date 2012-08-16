@@ -1,3 +1,19 @@
+= PeopleAdmin fork
+
+PeopleAdmin maintains a forked copy of AwesomeNestedSet.
+
+The *master* branch will remain unchanged, so that it can be kept in synch with
+collectiveidea/awesome_nested_set.
+
+Added features are maintained in separate branches, so that they can be submitted
+as pull requests independently. For example, the *subset* branch contains all
+changes related to our proposed :subset option.
+
+Our Gemfile will refer to this *deploy* branch. All changes from *master* and
+our feature branches should be merged into *deploy*. No changes should be made
+directly to the *deploy* branch (other than the merge commits, and this 
+Readme.rdoc).
+
 = AwesomeNestedSet
 
 Awesome Nested Set is an implementation of the nested set pattern for ActiveRecord models. It is replacement for acts_as_nested_set and BetterNestedSet, but more awesome.
