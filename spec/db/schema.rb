@@ -7,6 +7,7 @@ ActiveRecord::Schema.define(:version => 0) do
     t.column :rgt, :integer
     t.column :depth, :integer
     t.column :organization_id, :integer
+    t.column :inactive, :boolean
   end
 
   create_table :departments, :force => true do |t|
