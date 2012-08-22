@@ -5,6 +5,13 @@ describe "AwesomeNestedSet" do
     self.class.fixtures :categories, :departments, :notes, :things, :brokens
   end
 
+  describe "active scope" do
+    it "should recognize active scope" do
+      Category.count.should == 8
+      Category.active.count.should == 6
+    end
+  end
+
   describe "defaults" do
     it "should have left_column_default" do
       Default.acts_as_nested_set_options[:left_column].should == 'lft'
@@ -103,8 +110,8 @@ describe "AwesomeNestedSet" do
     ScopedCategory.acts_as_nested_set_options[:scope].should == :organization_id
   end
 
-  it "roots_class_method" do
-    Category.roots.should == Category.find_all_by_parent_id(nil)
+  it "roots_class_method respects subset option" do
+    Category.roots.should == Category.active.find_all_by_parent_id(nil)
   end
 
   it "root_class_method" do
@@ -121,7 +128,7 @@ describe "AwesomeNestedSet" do
   end
 
   it "root when not persisted and parent_column_name value is set" do
-    last_category = Category.last
+    last_category = Category.active.last
     Category.new(Default.parent_column_name => last_category.id).root.should == last_category.root
   end
 
@@ -598,6 +605,15 @@ describe "AwesomeNestedSet" do
     Category.rebuild!
     Category.valid?.should be_true
     before_text.should == Category.root.to_text
+  end
+
+  it "rebuild ignores records excluded by the subset option" do
+    Category.rebuild!
+    Category.valid?.should be_true
+    categories(:ignored_top_1).lft.should be_nil
+    categories(:ignored_top_1).rgt.should be_nil
+    categories(:ignored_top_2).lft.should be_nil
+    categories(:ignored_top_2).rgt.should be_nil
   end
 
   it "move_possible_for_sibling" do

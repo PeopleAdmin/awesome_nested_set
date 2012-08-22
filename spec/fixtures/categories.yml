@@ -32,3 +32,11 @@ top_level_2:
   name: Top Level 2
   lft: 11
   rgt: 12
+ignored_top_1:
+  id: 7
+  name: Ignored Top 1
+  inactive: true
+ignored_top_2:
+  id: 8
+  name: Ignored Top 2
+  inactive: true

@@ -9,7 +9,8 @@ end
 
 class ScopedCategory < ActiveRecord::Base
   self.table_name = 'categories'
-  acts_as_nested_set :scope => :organization
+  acts_as_nested_set :scope => :organization, :subset => :active
+  scope :active, where(:inactive => nil)
 end
 
 class RenamedColumns < ActiveRecord::Base
@@ -20,9 +21,10 @@ class RenamedColumns < ActiveRecord::Base
 end
 
 class Category < ActiveRecord::Base
-  acts_as_nested_set
+  acts_as_nested_set :subset => :active
 
   validates_presence_of :name
+  scope :active, where(:inactive => nil)
 
   # Setup a callback that we can switch to true or false per-test
   set_callback :move, :before, :custom_before_move
