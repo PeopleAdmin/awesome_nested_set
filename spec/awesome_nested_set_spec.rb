@@ -195,37 +195,56 @@ describe "AwesomeNestedSet" do
     categories(:top_level).leaves.should == leaves
   end
 
-  it "level" do
-    categories(:top_level).level.should == 0
-    categories(:child_1).level.should == 1
-    categories(:child_2_1).level.should == 2
+  describe "level" do
+    it "returns the correct level" do
+      categories(:top_level).level.should == 0
+      categories(:child_1).level.should == 1
+      categories(:child_2_1).level.should == 2
+    end
+
+    context "given parent associations are loaded" do
+      it "returns the correct level" do
+        child = categories(:child_1)
+        if child.respond_to?(:association)
+          child.association(:parent).load_target
+          child.parent.association(:parent).load_target
+          child.level.should == 1
+        else
+          pending 'associations not used where child#association is not a method'
+        end
+      end
+    end
   end
 
   describe "depth" do
     let(:lawyers) { Category.create!(:name => "lawyers") }
     let(:us) { Category.create!(:name => "United States") }
+    let(:new_york) { Category.create!(:name => "New York") }
     let(:patent) { Category.create!(:name => "Patent Law") }
 
     before(:each) do
-      # lawyers > us > patent
+      # lawyers > us > new_york > patent
       us.move_to_child_of(lawyers)
-      patent.move_to_child_of(us)
-      [lawyers, us, patent].each(&:reload)
+      new_york.move_to_child_of(us)
+      patent.move_to_child_of(new_york)
+      [lawyers, us, new_york, patent].each(&:reload)
     end
 
     it "updates depth when moved into child position" do
       lawyers.depth.should == 0
       us.depth.should == 1
-      patent.depth.should == 2
+      new_york.depth.should == 2
+      patent.depth.should == 3
     end
 
-    it "updates depth of child when parent is moved" do
+    it "updates depth of all descendants when parent is moved" do
       # lawyers
-      # us > patent
+      # us > new_york > patent
       us.move_to_right_of(lawyers)
-      [lawyers, us, patent].each(&:reload)
+      [lawyers, us, new_york, patent].each(&:reload)
       us.depth.should == 0
-      patent.depth.should == 1
+      new_york.depth.should == 1
+      patent.depth.should == 2
     end
   end
 
@@ -246,8 +265,13 @@ describe "AwesomeNestedSet" do
 
   it "self_and_descendants" do
     parent = categories(:top_level)
-    self_and_descendants = [parent, categories(:child_1), categories(:child_2),
-      categories(:child_2_1), categories(:child_3)]
+    self_and_descendants = [
+      parent,
+      categories(:child_1),
+      categories(:child_2),
+      categories(:child_2_1),
+      categories(:child_3)
+    ]
     self_and_descendants.should == parent.self_and_descendants
     self_and_descendants.count.should == parent.self_and_descendants.count
   end
@@ -267,8 +291,12 @@ describe "AwesomeNestedSet" do
 
   it "self_and_descendants" do
     parent = categories(:top_level)
-    descendants = [categories(:child_1), categories(:child_2),
-      categories(:child_2_1), categories(:child_3)]
+    descendants = [
+      categories(:child_1),
+      categories(:child_2),
+      categories(:child_2_1),
+      categories(:child_3)
+    ]
     descendants.should == parent.descendants
   end
 
@@ -552,6 +580,32 @@ describe "AwesomeNestedSet" do
     Category.rebuild!
 
     Category.roots.last.to_text.should == output
+  end
+
+  it "should_move_to_ordered_child" do
+    node1 = Category.create(:name => 'Node-1')
+    node2 = Category.create(:name => 'Node-2')
+    node3 = Category.create(:name => 'Node-3')
+
+    node2.move_to_ordered_child_of(node1, "name")
+
+    assert_equal node1, node2.parent
+    assert_equal 1, node1.children.count
+
+    node3.move_to_ordered_child_of(node1, "name", true) # acending
+
+    assert_equal node1, node3.parent
+    assert_equal 2, node1.children.count
+    assert_equal node2.name, node1.children[0].name
+    assert_equal node3.name, node1.children[1].name
+
+    node3.move_to_ordered_child_of(node1, "name", false) # decending
+    node1.reload
+
+    assert_equal node1, node3.parent
+    assert_equal 2, node1.children.count
+    assert_equal node3.name, node1.children[0].name
+    assert_equal node2.name, node1.children[1].name
   end
 
   it "should be able to rebuild without validating each record" do
@@ -857,7 +911,8 @@ describe "AwesomeNestedSet" do
       [1, "Child 1"],
       [1, "Child 2"],
       [2, "Child 2.1"],
-      [1, "Child 3" ]]
+      [1, "Child 3" ]
+    ]
 
     check_structure(Category.root.self_and_descendants, levels)
 
@@ -883,9 +938,10 @@ describe "AwesomeNestedSet" do
       [2, "Child 1.2"],
       [1, "Child 2"],
       [2, "Child 2.1"],
-      [1, "Child 3" ]]
+      [1, "Child 3" ]
+    ]
 
-      check_structure(Category.root.self_and_descendants, levels)
+    check_structure(Category.root.self_and_descendants, levels)
   end
 
   it "should not error on a model with attr_accessible" do
@@ -966,6 +1022,12 @@ describe "AwesomeNestedSet" do
     end
   end
 
+  describe 'rebuilding tree with a default scope ordering' do
+    it "doesn't throw exception" do
+      expect { Position.rebuild! }.not_to raise_error
+    end
+  end
+
   describe 'creating roots with a default scope ordering' do
     it "assigns rgt and lft correctly" do
       alpha = Order.create(:name => 'Alpha')
@@ -978,6 +1040,65 @@ describe "AwesomeNestedSet" do
       gamma.rgt.should == 4
       omega.lft.should == 5
       omega.rgt.should == 6
+    end
+  end
+
+  describe 'moving node from one scoped tree to another' do
+    xit "moves single node correctly" do
+      root1 = Note.create!(:body => "A-1", :notable_id => 4, :notable_type => 'Category')
+      child1_1 = Note.create!(:body => "B-1", :notable_id => 4, :notable_type => 'Category')
+      child1_2 = Note.create!(:body => "C-1", :notable_id => 4, :notable_type => 'Category')
+      child1_1.move_to_child_of root1
+      child1_2.move_to_child_of root1
+
+      root2 = Note.create!(:body => "A-2", :notable_id => 5, :notable_type => 'Category')
+      child2_1 = Note.create!(:body => "B-2", :notable_id => 5, :notable_type => 'Category')
+      child2_2 = Note.create!(:body => "C-2", :notable_id => 5, :notable_type => 'Category')
+      child2_1.move_to_child_of root2
+      child2_2.move_to_child_of root2
+
+      child1_1.update_attributes!(:notable_id => 5)
+      child1_1.move_to_child_of root2
+
+      root1.children.should == [child1_2]
+      root2.children.should == [child2_1, child2_2, child1_1]
+
+      Note.valid?.should == true
+    end
+
+    xit "moves node with children correctly" do
+      root1 = Note.create!(:body => "A-1", :notable_id => 4, :notable_type => 'Category')
+      child1_1 = Note.create!(:body => "B-1", :notable_id => 4, :notable_type => 'Category')
+      child1_2 = Note.create!(:body => "C-1", :notable_id => 4, :notable_type => 'Category')
+      child1_1.move_to_child_of root1
+      child1_2.move_to_child_of child1_1
+
+      root2 = Note.create!(:body => "A-2", :notable_id => 5, :notable_type => 'Category')
+      child2_1 = Note.create!(:body => "B-2", :notable_id => 5, :notable_type => 'Category')
+      child2_2 = Note.create!(:body => "C-2", :notable_id => 5, :notable_type => 'Category')
+      child2_1.move_to_child_of root2
+      child2_2.move_to_child_of root2
+
+      child1_1.update_attributes!(:notable_id => 5)
+      child1_1.move_to_child_of root2
+
+      root1.children.should == []
+      root2.children.should == [child2_1, child2_2, child1_1]
+      child1_1.children should == [child1_2]
+      root2.siblings.should == [child2_1, child2_2, child1_1, child1_2]
+
+      Note.valid?.should == true
+    end
+  end
+
+  describe 'specifying custom sort column' do
+    it "should sort by the default sort column" do
+      Category.order_column.should == 'lft'
+    end
+
+    it "should sort by custom sort column" do
+      OrderedCategory.acts_as_nested_set_options[:order_column].should == 'name'
+      OrderedCategory.order_column.should == 'name'
     end
   end
 end
