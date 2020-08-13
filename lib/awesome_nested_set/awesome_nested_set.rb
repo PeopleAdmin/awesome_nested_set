@@ -524,7 +524,7 @@ module CollectiveIdea #:nodoc:
           options[:conditions] = scopes.inject({}) do |conditions,attr|
             conditions.merge attr => self[attr]
           end unless scopes.empty?
-          self.class.base_class.unscoped.nested_set_subset.scoped options
+          self.class.base_class.unscoped.nested_set_subset.where(options[:conditions]).order(options[:order])
         end
 
         def store_new_parent
