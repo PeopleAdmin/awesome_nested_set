@@ -132,25 +132,46 @@ module CollectiveIdea #:nodoc:
 
           def left_and_rights_valid?
             ## AS clause not supported in Oracle in FROM clause for aliasing table name
-            nested_set_subset.
-            joins("LEFT OUTER JOIN #{quoted_table_name}" +
-                (self.class.connection.adapter_name.match(/Oracle/).nil? ?  " AS " : " ") +
-                "parent ON " +
-                "#{quoted_parent_column_full_name} = parent.#{primary_key}").
-            where(
-                "#{quoted_left_column_full_name} IS NULL OR " +
-                "#{quoted_right_column_full_name} IS NULL OR " +
-                "#{quoted_left_column_full_name} >= " +
-                  "#{quoted_right_column_full_name} OR " +
-                "(#{quoted_parent_column_full_name} IS NOT NULL AND " +
-                  "(#{quoted_left_column_full_name} <= parent.#{quoted_left_column_name} OR " +
-                  "#{quoted_right_column_full_name} >= parent.#{quoted_right_column_name}))"
-            ).count == 0
+            if self.class == Class
+              nested_set_subset.
+                  joins("LEFT OUTER JOIN #{quoted_table_name}" +
+                            (self.connection.adapter_name.match(/Oracle/).nil? ?  " AS " : " ") +
+                            "parent ON " +
+                            "#{quoted_parent_column_full_name} = parent.#{primary_key}").
+                  where(
+                      "#{quoted_left_column_full_name} IS NULL OR " +
+                          "#{quoted_right_column_full_name} IS NULL OR " +
+                          "#{quoted_left_column_full_name} >= " +
+                          "#{quoted_right_column_full_name} OR " +
+                          "(#{quoted_parent_column_full_name} IS NOT NULL AND " +
+                          "(#{quoted_left_column_full_name} <= parent.#{quoted_left_column_name} OR " +
+                          "#{quoted_right_column_full_name} >= parent.#{quoted_right_column_name}))"
+                  ).count == 0
+            else
+              nested_set_subset.
+                  joins("LEFT OUTER JOIN #{quoted_table_name}" +
+                            (self.class.connection.adapter_name.match(/Oracle/).nil? ?  " AS " : " ") +
+                            "parent ON " +
+                            "#{quoted_parent_column_full_name} = parent.#{primary_key}").
+                  where(
+                      "#{quoted_left_column_full_name} IS NULL OR " +
+                          "#{quoted_right_column_full_name} IS NULL OR " +
+                          "#{quoted_left_column_full_name} >= " +
+                          "#{quoted_right_column_full_name} OR " +
+                          "(#{quoted_parent_column_full_name} IS NOT NULL AND " +
+                          "(#{quoted_left_column_full_name} <= parent.#{quoted_left_column_name} OR " +
+                          "#{quoted_right_column_full_name} >= parent.#{quoted_right_column_name}))"
+                  ).count == 0
+            end
           end
 
           def no_duplicates_for_columns?
             scope_string = Array(acts_as_nested_set_options[:scope]).map do |c|
-              self.class.connection.quote_column_name(c)
+              if self.class == Class
+                self.connection.quote_column_name(c)
+              else
+                self.class.connection.quote_column_name(c)
+              end
             end.push(nil).join(", ")
             [quoted_left_column_full_name, quoted_right_column_full_name].all? do |column|
               # No duplicates
@@ -203,7 +224,11 @@ module CollectiveIdea #:nodoc:
               if acts_as_nested_set_options[:scope]
                 scope = lambda{|node|
                   scope_column_names.inject(""){|str, column_name|
-                    str << "AND #{self.class.connection.quote_column_name(column_name)} = #{self.class.connection.quote(node.send(column_name.to_sym))} "
+                    if self.class == Class
+                      str << "AND #{self.connection.quote_column_name(column_name)} = #{self.connection.quote(node.send(column_name.to_sym))} "
+                    else
+                      str << "AND #{self.class.connection.quote_column_name(column_name)} = #{self.class.connection.quote(node.send(column_name.to_sym))} "
+                    end
                   }
                 }
               end
@@ -743,23 +768,45 @@ module CollectiveIdea #:nodoc:
         end
 
         def quoted_left_column_name
-          self.class.connection.quote_column_name(left_column_name)
+          if self.class == Class
+            self.connection.quote_column_name(left_column_name)
+          else
+            self.class.connection.quote_column_name(left_column_name)
+          end
         end
 
         def quoted_right_column_name
-          self.class.connection.quote_column_name(right_column_name)
+          if self.class == Class
+            self.connection.quote_column_name(right_column_name)
+          else
+            self.class.connection.quote_column_name(right_column_name)
+          end
         end
 
         def quoted_depth_column_name
-          self.class.connection.quote_column_name(depth_column_name)
+          if self.class == Class
+            self.connection.quote_column_name(depth_column_name)
+          else
+            self.class.connection.quote_column_name(depth_column_name)
+          end
         end
 
         def quoted_parent_column_name
-          self.class.connection.quote_column_name(parent_column_name)
+          if self.class == Class
+            self.connection.quote_column_name(parent_column_name)
+          else
+            self.class.connection.quote_column_name(parent_column_name)
+          end
         end
 
         def quoted_scope_column_names
-          scope_column_names.collect {|column_name| self.class.connection.quote_column_name(column_name) }
+          scope_column_names.collect do |column_name|
+            if self.class == Class
+              self.connection.quote_column_name(column_name)
+            else
+              self.class.connection.quote_column_name(column_name)
+            end
+          end
         end
 
         def quoted_left_column_full_name
